@@ -2,17 +2,12 @@
  * Copyright (c) 2026 ByteDance Ltd. and/or its affiliates
  * SPDX-License-Identifier: MIT
  *
- * Local shim for symbols removed from openclaw/plugin-sdk in 2026.3.14.
- * Provides jsonResult and readReactionParams with correct typing.
+ * Local shim for readReactionParams whose SDK signature changed in
+ * 2026.3.14 (now requires a channel-specific config object).
+ * Re-exports jsonResult from the SDK directly.
  */
 
-/**
- * Wrap an object as an AgentToolResult-compatible text result.
- * Returns the { content, details } shape expected by pi-agent-core.
- */
-export function jsonResult(obj: unknown): { content: Array<{ type: 'text'; text: string }>; details: unknown } {
-  return { content: [{ type: 'text' as const, text: JSON.stringify(obj) }], details: obj };
-}
+export { jsonResult } from 'openclaw/plugin-sdk/agent-runtime';
 
 /**
  * Extract reaction parameters from raw action params.

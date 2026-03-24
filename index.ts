@@ -9,6 +9,7 @@
  */
 
 import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
+import { emptyPluginConfigSchema } from 'openclaw/plugin-sdk';
 import { feishuPlugin } from './src/channel/plugin';
 import { LarkClient } from './src/core/lark-client';
 import { registerOapiTools } from './src/tools/oapi/index';
@@ -27,14 +28,6 @@ import { larkLogger } from './src/core/lark-logger';
 import { emitSecurityWarnings } from './src/core/security-check';
 
 const log = larkLogger('plugin');
-
-function emptyPluginConfigSchema(): Record<string, unknown> {
-  return {
-    type: 'object',
-    additionalProperties: false,
-    properties: {},
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Re-exports for external consumers
