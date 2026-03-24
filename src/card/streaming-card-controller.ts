@@ -151,6 +151,11 @@ export class StreamingCardController {
     return Date.now() - this.dispatchStartTime;
   }
 
+  private needsFooterMetrics(): boolean {
+    const footer = this.deps.resolvedFooter;
+    return footer.tokens || footer.cache || footer.context || footer.model;
+  }
+
   private async getFooterSessionMetrics(): Promise<FooterSessionMetrics | undefined> {
     try {
       const runtime = LarkClient.runtime as {
@@ -522,7 +527,7 @@ export class StreamingCardController {
     if (this.cardCreationPromise) await this.cardCreationPromise;
 
     const errorEffectiveCardId = this.cardKit.cardKitCardId ?? this.cardKit.originalCardKitCardId;
-    const footerMetrics = await this.getFooterSessionMetrics();
+    const footerMetrics = this.needsFooterMetrics() ? await this.getFooterSessionMetrics() : undefined;
     if (this.cardKit.cardMessageId) {
       try {
         const rawErrorText = this.text.accumulatedText
@@ -613,7 +618,7 @@ export class StreamingCardController {
           },
           this.imageResolver,
         );
-        const footerMetrics = await this.getFooterSessionMetrics();
+        const footerMetrics = this.needsFooterMetrics() ? await this.getFooterSessionMetrics() : undefined;
 
         const completeCard = buildCardContent('complete', {
           text: terminalContent.text,
@@ -687,7 +692,7 @@ export class StreamingCardController {
         },
         this.imageResolver,
       );
-      const footerMetrics = await this.getFooterSessionMetrics();
+      const footerMetrics = this.needsFooterMetrics() ? await this.getFooterSessionMetrics() : undefined;
       if (effectiveCardId) {
         const abortCardContent = buildCardContent('complete', {
           text: terminalContent.text,
