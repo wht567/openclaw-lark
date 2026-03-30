@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { compactNumber, formatFooterRuntimeSegments } from '../src/card/builder';
+import { buildCardContent, compactNumber, formatFooterRuntimeSegments } from '../src/card/builder';
 
 // ---------------------------------------------------------------------------
 // compactNumber
@@ -26,7 +26,7 @@ describe('compactNumber', () => {
 // ---------------------------------------------------------------------------
 
 describe('formatFooterRuntimeSegments', () => {
-  it('renders configured runtime metrics', () => {
+  it('renders configured runtime metrics split into primary and detail lines', () => {
     const result = formatFooterRuntimeSegments({
       footer: {
         status: true,
@@ -49,23 +49,13 @@ describe('formatFooterRuntimeSegments', () => {
       },
     });
 
-    expect(result.zh).toEqual([
-      '已完成',
-      '耗时 12.3s',
-      '↑ 1.2k ↓ 3.5k',
-      '缓存 800/200 (36%)',
-      '上下文 4.5k/128k (4%)',
-      'claude-opus-4-6',
-    ]);
+    // Primary line: status, elapsed, model
+    expect(result.primaryZh).toEqual(['已完成', '耗时 12.3s', 'claude-opus-4-6']);
+    expect(result.primaryEn).toEqual(['Completed', 'Elapsed 12.3s', 'claude-opus-4-6']);
 
-    expect(result.en).toEqual([
-      'Completed',
-      'Elapsed 12.3s',
-      '↑ 1.2k ↓ 3.5k',
-      'Cache 800/200 (36%)',
-      'Context 4.5k/128k (4%)',
-      'claude-opus-4-6',
-    ]);
+    // Detail line: tokens, cache, context
+    expect(result.detailZh).toEqual(['↑ 1.2k ↓ 3.5k', '缓存 800/200 (36%)', '上下文 4.5k/128k (4%)']);
+    expect(result.detailEn).toEqual(['↑ 1.2k ↓ 3.5k', 'Cache 800/200 (36%)', 'Context 4.5k/128k (4%)']);
   });
 
   it('respects missing metrics and status variants', () => {
@@ -82,8 +72,10 @@ describe('formatFooterRuntimeSegments', () => {
       },
     });
 
-    expect(stopped.zh).toEqual(['已停止', '↑ 100 ↓ 50']);
-    expect(stopped.en).toEqual(['Stopped', '↑ 100 ↓ 50']);
+    expect(stopped.primaryZh).toEqual(['已停止']);
+    expect(stopped.primaryEn).toEqual(['Stopped']);
+    expect(stopped.detailZh).toEqual(['↑ 100 ↓ 50']);
+    expect(stopped.detailEn).toEqual(['↑ 100 ↓ 50']);
 
     const errored = formatFooterRuntimeSegments({
       footer: { status: true, elapsed: true },
@@ -91,7 +83,74 @@ describe('formatFooterRuntimeSegments', () => {
       isError: true,
     });
 
-    expect(errored.zh).toEqual(['出错', '耗时 1.0s']);
-    expect(errored.en).toEqual(['Error', 'Elapsed 1.0s']);
+    expect(errored.primaryZh).toEqual(['出错', '耗时 1.0s']);
+    expect(errored.primaryEn).toEqual(['Error', 'Elapsed 1.0s']);
+    expect(errored.detailZh).toEqual([]);
+    expect(errored.detailEn).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildCardContent – footer rendered as a single markdown element with \n
+// ---------------------------------------------------------------------------
+
+describe('buildCardContent – footer line joining', () => {
+  /** Extract footer markdown elements (notation-sized) from the card's top-level elements array. */
+  function footerElements(card: ReturnType<typeof buildCardContent>) {
+    const elements = (card as { elements?: Array<Record<string, unknown>> }).elements ?? [];
+    return elements.filter((el) => el.tag === 'markdown' && el.text_size === 'notation');
+  }
+
+  it('merges primary and detail lines into one markdown element with \\n', () => {
+    const card = buildCardContent('complete', {
+      text: 'hello',
+      footer: { status: true, elapsed: true, tokens: true, cache: true, context: true, model: true },
+      footerMetrics: {
+        inputTokens: 1000,
+        outputTokens: 200,
+        cacheRead: 500,
+        cacheWrite: 100,
+        totalTokens: 1200,
+        totalTokensFresh: true,
+        contextTokens: 128000,
+        model: 'test-model',
+      },
+      elapsedMs: 5000,
+    });
+
+    const fes = footerElements(card);
+
+    // Should be exactly ONE footer element (not two)
+    expect(fes).toHaveLength(1);
+
+    // The zh_cn content should contain \n joining the two lines
+    const zhContent = (fes[0].i18n_content as Record<string, string>)?.zh_cn;
+    const lines = zhContent.split('\n');
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain('已完成');
+    expect(lines[0]).toContain('耗时');
+    expect(lines[0]).toContain('test-model');
+    expect(lines[1]).toContain('↑');
+    expect(lines[1]).toContain('缓存');
+    expect(lines[1]).toContain('上下文');
+  });
+
+  it('renders single line when only primary segments exist', () => {
+    const card = buildCardContent('complete', {
+      text: 'hello',
+      footer: { status: true, elapsed: true },
+      elapsedMs: 3000,
+    });
+
+    const fes = footerElements(card);
+    expect(fes).toHaveLength(1);
+
+    const content = fes[0].content as string;
+    expect(content).not.toContain('\n');
+  });
+
+  it('renders no footer element when all footer flags are off', () => {
+    const card = buildCardContent('complete', { text: 'hello' });
+    expect(footerElements(card)).toHaveLength(0);
   });
 });

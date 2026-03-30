@@ -42,9 +42,30 @@ function baseConfig(section: FeishuConfig): Omit<FeishuConfig, 'accounts'> {
   return rest;
 }
 
-/** Merge base config with account override (account fields take precedence). */
+/** Merge base config with account override (account fields take precedence).
+ *  Performs a one-level deep merge for plain-object fields so that partial
+ *  account overrides (e.g. `footer: { model: false }`) are merged with
+ *  the base instead of replacing the entire object. */
 function mergeAccountConfig(base: Omit<FeishuConfig, 'accounts'>, override: Partial<FeishuConfig>): FeishuConfig {
-  return { ...base, ...override } as FeishuConfig;
+  const result: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    if (value === undefined) continue;
+    const baseVal = (base as Record<string, unknown>)[key];
+    // Deep-merge plain objects one level (footer, tools, heartbeat, etc.)
+    if (
+      value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      baseVal &&
+      typeof baseVal === 'object' &&
+      !Array.isArray(baseVal)
+    ) {
+      result[key] = { ...baseVal, ...value };
+    } else {
+      result[key] = value;
+    }
+  }
+  return result as FeishuConfig;
 }
 
 /** Coerce a domain string to `LarkBrand`, defaulting to `"feishu"`. */
