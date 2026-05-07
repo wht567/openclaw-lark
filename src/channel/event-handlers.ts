@@ -73,6 +73,23 @@ export async function handleMessageEvent(ctx: MonitorContext, data: unknown): Pr
   const { accountId, log, error } = ctx;
   try {
     const event = data as FeishuMessageEvent;
+
+    // Self-echo hard filter — drop messages authored by this very bot before
+    // dedup and enqueue. Prevents self-reply loops; the primary guardrail
+    // against bot-to-bot ping-pong.
+    //
+    // NOTE: if botOpenId is not yet populated (startup race before probe
+    // resolves), this filter is skipped. The downstream bot-sender gate
+    // (checkBotSenderGate) acts as fallback — bot messages default to
+    // `allowBots='mentions'`, so in groups they require an explicit @-mention
+    // of this bot to pass; DMs are pass-through under the default.
+    const senderOpenId = event.sender?.sender_id?.open_id;
+    const botOpenId = ctx.lark.botOpenId;
+    if (botOpenId && senderOpenId && senderOpenId === botOpenId) {
+      log(`feishu[${accountId}]: drop self-echo message ${event.message?.message_id ?? 'unknown'}`);
+      return;
+    }
+
     const msgId = event.message?.message_id ?? 'unknown';
     const chatId = event.message?.chat_id ?? '';
     // In topic groups, reply events carry root_id but not thread_id.
