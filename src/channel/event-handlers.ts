@@ -24,12 +24,15 @@ import { parseFeishuDriveCommentNoticeEventPayload } from '../messaging/inbound/
 import { isMessageExpired } from '../messaging/inbound/dedup';
 import { withTicket } from '../core/lark-ticket';
 import { larkLogger } from '../core/lark-logger';
-import { handleCardAction } from '../tools/auto-auth';
-import { handleAskUserAction } from '../tools/ask-user-question';
 import { buildQueueKey, enqueueFeishuChatTask, getActiveDispatcher, hasActiveTask } from './chat-queue';
 import { extractRawTextFromEvent, isLikelyAbortText } from './abort-detect';
 import type { MonitorContext } from './types';
 import { dispatchFeishuPluginInteractiveHandler } from './interactive-dispatch';
+import { extractActionFromEvent, getCardActionHandler } from './card-action-registry';
+
+// Side-effect imports: these modules register their card action handlers on load.
+import '../tools/auto-auth';
+import '../tools/ask-user-question';
 
 const elog = larkLogger('channel/event-handlers');
 
@@ -406,15 +409,18 @@ export async function handleCommentEvent(ctx: MonitorContext, data: unknown): Pr
 
 export async function handleCardActionEvent(ctx: MonitorContext, data: unknown): Promise<unknown> {
   try {
-    // AskUserQuestion：表单卡片交互（宿主内建能力优先）
-    const askResult = handleAskUserAction(data, ctx.cfg, ctx.accountId);
-    if (askResult !== undefined) return askResult;
+    // 1. Try the card action registry (includes auto-auth, ask_user_question,
+    //    and any custom card types registered via registerCardAction).
+    const event = extractActionFromEvent(data);
+    if (event) {
+      const handler = getCardActionHandler(event.action);
+      if (handler) {
+        return await handler(event, ctx);
+      }
+    }
 
-    // auto-auth：授权/权限引导相关卡片交互（宿主内建能力优先）
-    const authResult = await handleCardAction(data, ctx.cfg, ctx.accountId);
-    if (authResult !== undefined) return authResult;
-
-    // 业务自定义卡片交互：使用 SDK 标准 interactive dispatch 管道转发给业务插件。
+    // 2. Fallback: forward to external plugins via the SDK's interactive
+    //    dispatch pipeline.
     return await dispatchFeishuPluginInteractiveHandler({ cfg: ctx.cfg, accountId: ctx.accountId, data });
   } catch (err) {
     elog.warn(`card.action.trigger handler error: ${err}`);

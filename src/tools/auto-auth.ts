@@ -44,6 +44,7 @@ import { LarkClient } from '../core/lark-client';
 import { createCardEntity, sendCardByCardId, updateCardKitCardForAuth } from '../card/cardkit';
 import { OwnerAccessDeniedError } from '../core/owner-policy';
 import { dispatchSyntheticTextMessage } from '../messaging/inbound/synthetic-message';
+import { registerCardAction } from '../channel/card-action-registry';
 import { executeAuthorize } from './oauth';
 import { formatToolResult, getResolvedConfig } from './helpers';
 import type { ToolResult } from './helpers';
@@ -1104,3 +1105,12 @@ export async function handleInvokeErrorWithAutoAuth(err: unknown, cfg: ClawdbotC
     error: formatLarkError(err),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Registry: register app_auth_done into the card action framework
+// ---------------------------------------------------------------------------
+
+registerCardAction('app_auth_done', (event, ctx) => {
+  if (!event.rawEvent) return undefined;
+  return handleCardAction(event.rawEvent, ctx.cfg, ctx.accountId);
+});

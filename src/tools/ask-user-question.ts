@@ -28,6 +28,7 @@ import { larkLogger } from '../core/lark-logger';
 import { createCardEntity, sendCardByCardId, updateCardKitCard } from '../card/cardkit';
 import { buildQueueKey, enqueueFeishuChatTask } from '../channel/chat-queue';
 import { handleFeishuMessage } from '../messaging/inbound/handler';
+import { registerCardAction } from '../channel/card-action-registry';
 import { checkToolRegistration, formatToolError, formatToolResult } from './helpers';
 
 const log = larkLogger('tools/ask-user-question');
@@ -1021,3 +1022,12 @@ export function registerAskUserQuestionTool(api: OpenClawPluginApi): void {
 
   api.logger.debug?.(`${toolName}: registered tool`);
 }
+
+// ---------------------------------------------------------------------------
+// Registry: register ask_user_question into the card action framework
+// ---------------------------------------------------------------------------
+
+registerCardAction('ask_user_submit', (event, ctx) => {
+  if (!event.rawEvent) return undefined;
+  return handleAskUserAction(event.rawEvent, ctx.cfg, ctx.accountId);
+});
