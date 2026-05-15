@@ -110,6 +110,8 @@ export function createSimpleCardHandler(config: SimpleCardActionConfig): CardAct
     const text = config.formatAnswerText(answers);
 
     if (event.openChatId && event.senderOpenId) {
+      // Infer chat type from the chat ID prefix: oc_ = group, ou_ = DM.
+      const chatType: 'p2p' | 'group' = event.openChatId.startsWith('oc_') ? 'group' : 'p2p';
       const syntheticMsgId = `card-action:${event.action}:${Date.now()}`;
       setImmediate(() => {
         dispatchSynthetic({
@@ -120,6 +122,7 @@ export function createSimpleCardHandler(config: SimpleCardActionConfig): CardAct
           text,
           syntheticMessageId: syntheticMsgId,
           replyToMessageId: event.openMessageId ?? syntheticMsgId,
+          chatType,
           runtime: { log: ctx.log, error: ctx.error },
         }).catch((err: unknown) => ctx.error(`synthetic message for action=${event.action} failed: ${String(err)}`));
       });
